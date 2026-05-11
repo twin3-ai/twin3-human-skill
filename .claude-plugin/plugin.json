@@ -1,0 +1,24 @@
+{
+  "name": "twin3-human",
+  "description": "Verify if any EVM wallet is backed by a real person — humanity score 0-255, proof of humanity, sybil resistance, per-method verification check. Trigger phrases: is this wallet real / a bot / a sybil, verify human, humanity check, sybil filter, proof of humanity, humanity score, Twin Matrix score, KYA (Know Your Anonymous), filter bots from airdrop list, 是不是真人, 驗證真人, 人類分數, 過濾機器人, 空投反女巫, 鏈下身份驗證. Pay per query with USD₮0 on X Layer.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Twin3.ai",
+    "email": "wen@twin3.ai"
+  },
+  "homepage": "https://twin3.ai",
+  "repository": "https://github.com/twin3-ai/twin3-human-skill",
+  "license": "MIT",
+  "keywords": [
+    "identity",
+    "humanity-verification",
+    "sybil-resistance",
+    "kya",
+    "proof-of-humanity",
+    "airdrop-filter",
+    "twin-matrix",
+    "sbt",
+    "x402",
+    "x-layer"
+  ]
+}
