@@ -166,6 +166,55 @@ User: "We require 2FA + Apple ID for this onboarding step. Check if `0xabc…123
 1. Run `onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=0xabc…123&check=apple,g2fa"`.
 2. Read `verifications.apple` and `verifications.g2fa`. Report each method's status to the user.
 
+## Case Studies
+
+These are the agent-builder patterns that have driven the bulk of inbound queries since launch. Use them as templates when proposing this skill to a user who has the same shape of problem.
+
+### CS-1 — Airdrop sybil filter, score-gated
+
+**Shape**: project has a candidate list of 500–50,000 wallets (from a Discord raid, a quest platform, a Galxe campaign). Wants to drop the bottom layer of obvious sybils without paying for full KYC.
+
+**Pattern**:
+1. Agent fetches the candidate list from the project's source (CSV, Dune query, snapshot).
+2. Loops `threshold-pass` at `min_score=70` (= reCAPTCHA + Google + Apple, the level real users almost always clear and bots rarely do).
+3. Returns two files: `qualified.csv` (humans) + `filtered.csv` (with reason).
+4. Reports filter rate. Typical sybil ratio observed: 35–55% of raw raid lists, 8–20% of organic community lists.
+
+**Why this beats alternatives**: cheaper than Gitcoin Passport (no per-user signup friction — Twin3's score is wallet-keyed and pre-existing), faster than manual review, leaves a paid audit trail for governance.
+
+### CS-2 — Discord / Telegram community bouncer
+
+**Shape**: community wants verified-human gate before granting `verified` role or chat access. Bot membership runs into the thousands; manual review doesn't scale.
+
+**Pattern**:
+1. New member binds wallet via the community's normal flow (sign message).
+2. Agent calls this skill with `wallet=<bound>` and `min_score=45` (= at least Google OAuth, weeds out throwaway bots without alienating new users).
+3. If `passes: true`, role granted. If `false`, polite redirect to twin3.ai to complete verification, retry-able once verified.
+
+**Operating cost**: a community of 5,000 newcomers/month costs $5/month in Twin3 fees — cheaper than one moderator-hour.
+
+### CS-3 — DePIN / quest reward distribution
+
+**Shape**: protocol distributes ongoing rewards to participants. Reward batch fires daily, monthly, or per-event. Distinguishing real users from farm-rigs is the difference between a healthy economy and a sybil collapse.
+
+**Pattern**:
+1. Before each reward batch, run the recipient list through `threshold-pass` at `min_score=105` (= 2FA tier; high-confidence human).
+2. Below-threshold wallets get a downgraded reward (e.g. 25%) instead of zero, with an in-app prompt to "verify your humanity at twin3.ai to unlock full rewards" — this converts sybil-suspect wallets into either upgraded real users or self-filtered drop-offs.
+3. Audit log retains the per-wallet verdict + the $0.001 paid x402 settlement — sufficient for community governance Q&A ("why was wallet X downweighted?").
+
+**Why per-method check matters here**: protocols with a strict on-chain identity policy can additionally require `check=worldid,onchain` for the top reward tier, layering Worldcoin / ENS-style proofs on top of Twin3's general humanity score.
+
+### CS-4 — Agent-to-agent gate (the meta case)
+
+**Shape**: an autonomous agent (e.g. a trading bot, a DAO governance bot) needs to know whether the wallet *it is paying or interacting with* is a real person — for example before honoring a high-value swap quote, before voting weight aggregation, or before honoring a referral.
+
+**Pattern**:
+1. Other agent's logic identifies a wallet of interest (`0xPEER`).
+2. Calls `human.twin3.ai/v1/human?wallet=0xPEER&include=verified_at,dimensions_filled`.
+3. Routes its own action by the verdict — e.g. higher slippage tolerance and tighter rate limits for `score < 45`, normal behaviour for `score ≥ 70`.
+
+This is the canonical "x402 service composed inside another x402 service" pattern and the reason this skill ships with Onchain OS — agents that have an `okx-agent-payments-protocol` setup already paid for can call this one without any additional onboarding.
+
 ## Error Handling
 
 | Error | Cause | Resolution |
