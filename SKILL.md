@@ -39,8 +39,15 @@ Backed by **141,871 Twin Matrix Soulbound Tokens** on BNB Chain plus the canonic
 
 Before using this skill, ensure:
 
-1. The `onchainos` CLI is installed and configured (`npx skills add okx/onchainos-skills`).
-2. The user's wallet has at least 0.001 USD₮0 on X Layer (chain id 196) — every query costs $0.001. Reference: [okx-wallet-portfolio](../okx-wallet-portfolio/SKILL.md) for balance check, [okx-dex-bridge](../okx-dex-bridge/SKILL.md) for bridging USDT to X Layer if needed.
+1. The agent runtime can settle x402 payments — i.e. the
+   `okx-agent-payments-protocol` skill is available (it ships with
+   `okx/onchainos-skills`). This skill does NOT pay for itself; it only
+   describes the resource. Payment of the 402 is delegated to the
+   **OKX Agent Payments Protocol**.
+2. The paying wallet has at least 0.001 USD₮0 on X Layer (chain id 196) —
+   every query costs $0.001. Reference: [okx-wallet-portfolio](../okx-wallet-portfolio/SKILL.md)
+   for a balance check, [okx-dex-bridge](../okx-dex-bridge/SKILL.md) to
+   bridge USDT to X Layer if needed.
 3. The wallet to be verified is a valid EVM address (`^0x[a-fA-F0-9]{40}$`).
 
 ## Endpoint
@@ -67,11 +74,19 @@ Before using this skill, ensure:
 
 **When to use**: User asks "is 0x… a real person?", "verify this wallet", "humanity score of 0x…", "錢包 0x… 是真人嗎？"
 
-```bash
-# Detect the 402 challenge with the x402 / Onchain OS Agent Payments Protocol
-onchainos payment pay \
-  --url "https://human.twin3.ai/v1/human?wallet=<WALLET>"
+Make a plain HTTP GET to the endpoint:
+
 ```
+GET https://human.twin3.ai/v1/human?wallet=<WALLET>
+```
+
+The first response is **HTTP 402** with a `PAYMENT-REQUIRED` challenge
+(USD₮0 on X Layer · $0.001). Do not hand-build a payment command. The
+**OKX Agent Payments Protocol** detects the 402, signs the EIP-3009
+authorization, replays the request, and returns the final body. If you
+have the `okx-agent-payments-protocol` skill available it triggers
+automatically on the 402; otherwise load it via the Skill tool. You
+never call its CLI directly — that surface is internal to that skill.
 
 **Output** (example):
 
@@ -95,10 +110,12 @@ onchainos payment pay \
 
 **When to use**: User says "is 0x… above humanity threshold 70?", "篩選分數 ≥ 70 的", "filter wallets above bot-floor".
 
-```bash
-onchainos payment pay \
-  --url "https://human.twin3.ai/v1/human?wallet=<WALLET>&min_score=<N>"
 ```
+GET https://human.twin3.ai/v1/human?wallet=<WALLET>&min_score=<N>
+```
+
+Same payment flow as above — plain GET, 402 handled by the **OKX Agent
+Payments Protocol**.
 
 **Output** adds:
 ```json
@@ -109,10 +126,12 @@ onchainos payment pay \
 
 **When to use**: User asks "did 0x… verify via Telegram AND Apple ID?", "驗證 0x… 是否做過 2FA + Google OAuth".
 
-```bash
-onchainos payment pay \
-  --url "https://human.twin3.ai/v1/human?wallet=<WALLET>&check=telegram,apple,g2fa"
 ```
+GET https://human.twin3.ai/v1/human?wallet=<WALLET>&check=telegram,apple,g2fa
+```
+
+Same payment flow — plain GET, 402 handled by the **OKX Agent Payments
+Protocol**.
 
 **Output** adds:
 ```json
@@ -129,17 +148,24 @@ onchainos payment pay \
 
 **When to use**: User has a list of wallets and wants to keep only the ones above a humanity threshold. Example: "filter sybils from this 100-wallet list, drop anyone below 70", "從這 100 個錢包過濾出分數 ≥ 70 的真人".
 
-For each wallet in the list, run a `threshold-pass` query (see above) with `min_score=<threshold>`. Aggregate results. At $0.001 per wallet, a 1,000-wallet filter costs $1.
+For each wallet in the list, issue a `threshold-pass` query (see above)
+with `min_score=<threshold>` and aggregate results. At $0.001 per
+wallet, a 1,000-wallet filter costs $1.
 
-Pseudo-loop:
-```bash
-for w in $WALLETS; do
-  onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=$w&min_score=70" \
-    | jq -r 'select(.passes==true) | .wallet'
-done > qualified-humans.txt
+Pseudo-loop (conceptual — each iteration is a plain GET whose 402 is
+auto-paid by the **OKX Agent Payments Protocol**, not a CLI call):
+
+```
+for w in WALLETS:
+    resp = GET https://human.twin3.ai/v1/human?wallet={w}&min_score=70
+           # 402 → OKX Agent Payments Protocol pays $0.001 USD₮0 → 200
+    if resp.passes == true: keep w
 ```
 
-The AI agent should ask the user to confirm total cost before kicking off batch — at scale, $1 / 1K wallets is cheap but ask for confirmation if list exceeds 100.
+The AI agent should ask the user to confirm total cost before kicking
+off a batch — at scale $1 / 1K wallets is cheap, but confirm if the
+list exceeds 100. Each wallet is one independent settlement; there is
+no batch discount and no single multi-wallet call.
 
 ## Examples
 
@@ -147,7 +173,7 @@ The AI agent should ask the user to confirm total cost before kicking off batch 
 
 User: "Is `0xd8da6bf26964af9d7eed9e03e53415d37aa96045` (vitalik.eth) a real person on Twin3?"
 
-1. Run `onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=0xd8da6bf26964af9d7eed9e03e53415d37aa96045"`
+1. `GET https://human.twin3.ai/v1/human?wallet=0xd8da6bf26964af9d7eed9e03e53415d37aa96045` — the 402 is auto-paid by the **OKX Agent Payments Protocol** ($0.001 USD₮0 on X Layer).
 2. Read the response. If `isHuman: true`, report the score with the reference levels above. If `false`, note that Vitalik has not claimed a Twin3 humanity SBT (yet).
 
 ### Example 2: Filter sybils from an airdrop list
@@ -163,7 +189,7 @@ User: "I have 50 wallet addresses for the next airdrop. Filter out anyone below 
 
 User: "We require 2FA + Apple ID for this onboarding step. Check if `0xabc…123` has both."
 
-1. Run `onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=0xabc…123&check=apple,g2fa"`.
+1. `GET https://human.twin3.ai/v1/human?wallet=0xabc…123&check=apple,g2fa` — 402 auto-paid by the **OKX Agent Payments Protocol**.
 2. Read `verifications.apple` and `verifications.g2fa`. Report each method's status to the user.
 
 ## Case Studies

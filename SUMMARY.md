@@ -11,38 +11,45 @@ Core operations:
 
 ## Prerequisites
 
-- `onchainos` CLI installed (`npx skills add okx/onchainos-skills`)
+- The agent runtime can settle x402 payments — the `okx-agent-payments-protocol` skill is available (ships with `npx skills add okx/onchainos-skills`). This skill describes the resource only; it never pays for itself.
 - An Onchain OS Agentic Wallet (or any OKX-compatible EVM signer) with USD₮0 on X Layer (chain id 196). Minimum balance: $0.001 USD₮0 per query.
 - Bridge USDT to X Layer if needed via `okx-dex-bridge` or OKX exchange withdrawal (select X Layer as the destination network).
 
 ## Quick Start
 
-1. **Check your USD₮0 balance on X Layer**:
+The endpoint is a standard x402-gated `GET`. You do **not** invoke a
+payment CLI yourself — issue the HTTP request, and the **OKX Agent
+Payments Protocol** auto-detects the `HTTP 402` / `PAYMENT-REQUIRED`
+challenge, signs the $0.001 USD₮0 authorization on X Layer, replays the
+request, and returns the final JSON body.
+
+1. **Check your USD₮0 balance on X Layer** (via the agentic-wallet skill):
 
    ```
-   onchainos wallet balance --chain xlayer --token 0x779ded0c9e1022225f8e0630b35a9b54be713736
+   onchainos wallet balance --chain xlayer --token-address 0x779ded0c9e1022225f8e0630b35a9b54be713736
    ```
 
 2. **Verify a single wallet** (replace `<WALLET>` with the EVM address to check):
 
    ```
-   onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=<WALLET>"
+   GET https://human.twin3.ai/v1/human?wallet=<WALLET>
+   → HTTP 402 → OKX Agent Payments Protocol pays $0.001 USD₮0 → HTTP 200
    ```
 
-   Reads back JSON with `isHuman`, `score` (0-255), `sbtId`, `scoreSource`. The agent paid $0.001 USD₮0 from your wallet to Twin3's receiver in the same flow.
+   Returns JSON with `isHuman`, `score` (0-255), `sbtId`, `scoreSource`.
 
 3. **Threshold filter** (for airdrop / community gating — example: keep only wallets at score ≥ 70):
 
    ```
-   onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=<WALLET>&min_score=70"
+   GET https://human.twin3.ai/v1/human?wallet=<WALLET>&min_score=70
    ```
 
-   Adds `passes: true|false` to the response. Loop across your wallet list to filter.
+   Adds `passes: true|false` to the response. Loop across your wallet list to filter (one settlement per wallet).
 
 4. **Per-method check** (ZK-style — name only the methods you want to know about):
 
    ```
-   onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=<WALLET>&check=telegram,apple,g2fa"
+   GET https://human.twin3.ai/v1/human?wallet=<WALLET>&check=telegram,apple,g2fa
    ```
 
    Returns `verifications: {telegram: bool, apple: bool, g2fa: bool}` — only the methods you named. The full verification list never leaves Twin3.

@@ -1,22 +1,40 @@
 # Quickstart — Twin3 Human via OKX Agentic Wallet
 
-End-to-end walkthrough for an OKX Onchain OS agent to verify a wallet's humanity score using Twin3.
+End-to-end walkthrough for an OKX Onchain OS agent to verify a wallet's
+humanity score using Twin3.
 
-This guide assumes the agent is running inside an Agentic Wallet session (email-login + TEE key) with `okx/onchainos-skills` installed. If you're a developer wiring this up from a non-OKX environment, see [api.md](./api.md) for the raw HTTP shape.
+This guide assumes the agent runs inside an Agentic Wallet session
+(email-login + TEE key) with `okx/onchainos-skills` installed. If you're
+a developer wiring this up from a non-OKX environment, see
+[api.md](./api.md) for the raw HTTP shape.
+
+> **Payment model — read this first.** Twin3 Human is a normal
+> x402-gated HTTP resource. The agent does **not** call a payment CLI
+> for it. The agent issues a plain `GET`; the first response is
+> `HTTP 402` with a `PAYMENT-REQUIRED` challenge; the **OKX Agent
+> Payments Protocol** (`okx-agent-payments-protocol` skill) auto-detects
+> that 402, signs the $0.001 USD₮0 EIP-3009 authorization on X Layer
+> with the wallet's TEE key, replays the request with the
+> `PAYMENT-SIGNATURE` header, and returns the final JSON. That skill's
+> internal CLI surface is not something this guide drives directly.
 
 ---
 
 ## Prerequisites Check (run once)
 
-1. **`onchainos` CLI present**:
+1. **Agent payments protocol available** — the `okx-agent-payments-protocol`
+   skill must be loadable (ships with `npx skills add okx/onchainos-skills`).
+   You can confirm the toolchain is present:
    ```bash
    onchainos --version
    ```
-   Install via `npx skills add okx/onchainos-skills` if absent.
+   Install via `npx skills add okx/onchainos-skills` if absent. (This
+   guide never invokes a payment subcommand directly — the payments
+   protocol skill owns that.)
 
-2. **Wallet has USD₮0 on X Layer**:
+2. **Wallet has USD₮0 on X Layer** (checked via the agentic-wallet skill):
    ```bash
-   onchainos wallet balance --chain xlayer --token 0x779ded0c9e1022225f8e0630b35a9b54be713736
+   onchainos wallet balance --chain xlayer --token-address 0x779ded0c9e1022225f8e0630b35a9b54be713736
    ```
 
    If the balance is below `0.001`, bridge or fund:
@@ -25,11 +43,12 @@ This guide assumes the agent is running inside an Agentic Wallet session (email-
 
    ⚠️ The token on X Layer **must be USD₮0** at the exact contract above. Other USDT representations (Stargate-bridged, Wormhole-bridged, etc.) are NOT accepted by Twin3's payment route.
 
-3. **(Optional) Confirm we can reach Twin3's challenge endpoint**:
+3. **(Optional, developer sanity check) Confirm the challenge endpoint is alive**:
    ```bash
-   curl -i https://human.twin3.ai/v1/human?wallet=0x344659f3eF3c2D2A0CDF071Ea13fa87867777777 | head -5
+   curl -i "https://human.twin3.ai/v1/human?wallet=0x344659f3eF3c2D2A0CDF071Ea13fa87867777777" | head -5
    ```
-   Expected: `HTTP/2 402` with a `payment-required:` header. This means the endpoint is alive and ready.
+   Expected: `HTTP/2 402` with a `payment-required:` header. This is a
+   raw curl probe for humans debugging — it is NOT how the agent pays.
 
 ---
 
@@ -37,14 +56,18 @@ This guide assumes the agent is running inside an Agentic Wallet session (email-
 
 User: "Is `0xVITALIK_OR_WHATEVER` a real person on Twin3?"
 
-### Step 1. Issue the paid request
+### Step 1. Issue the request
 
-```bash
-onchainos payment pay \
-  --url "https://human.twin3.ai/v1/human?wallet=0xVITALIK_OR_WHATEVER"
+```
+GET https://human.twin3.ai/v1/human?wallet=0xVITALIK_OR_WHATEVER
 ```
 
-The `payment pay` subcommand auto-detects the 402, picks X Layer's USD₮0 accept entry from the challenge, signs an EIP-3009 authorization with the wallet's TEE key, retries the request with the `PAYMENT-SIGNATURE` header, and prints the final JSON.
+The first response is `HTTP 402`. The **OKX Agent Payments Protocol**
+picks X Layer's USD₮0 entry from the challenge's `accepts` array, signs
+an EIP-3009 authorization with the wallet's TEE key, retries the request
+with the `PAYMENT-SIGNATURE` header, and yields the final JSON. You do
+not assemble or invoke any of that — it happens because the 402
+triggers the payments-protocol skill.
 
 ### Step 2. Interpret the response
 
@@ -77,12 +100,13 @@ User: "Block new signups from wallets below humanity score 45 (= at least reCAPT
 
 ### Setup
 
-The agent should add this gate as a precondition for whatever signup action follows. Inside the precondition:
+The agent should add this gate as a precondition for whatever signup action follows. Inside the precondition, issue:
 
-```bash
-onchainos payment pay \
-  --url "https://human.twin3.ai/v1/human?wallet=$NEW_USER_WALLET&min_score=45"
 ```
+GET https://human.twin3.ai/v1/human?wallet=<NEW_USER_WALLET>&min_score=45
+```
+
+(402 → auto-paid by the **OKX Agent Payments Protocol** → 200 with `passes`.)
 
 ### Decision
 
@@ -97,10 +121,11 @@ User: "We require 2FA AND Apple ID verifications to enter the premium tier. Chec
 
 ### Issue
 
-```bash
-onchainos payment pay \
-  --url "https://human.twin3.ai/v1/human?wallet=0xWHATEVER&check=apple,g2fa"
 ```
+GET https://human.twin3.ai/v1/human?wallet=0xWHATEVER&check=apple,g2fa
+```
+
+(Same payment flow — plain GET, 402 auto-paid.)
 
 ### Response
 
@@ -130,14 +155,20 @@ User: "I'm dropping a 200-wallet airdrop list. Filter to only humans at score �
 
 ### Step 2. Loop the threshold query
 
-Assuming the wallet list is in `wallets.txt` (one per line):
+For each wallet in the list, issue one request. Each iteration is an
+independent x402 settlement (no batch endpoint, no bulk discount):
 
-```bash
-while read -r w; do
-  result=$(onchainos payment pay --url "https://human.twin3.ai/v1/human?wallet=$w&min_score=70")
-  echo "$result" | jq -r 'select(.passes==true) | .wallet'
-done < wallets.txt > qualified.txt
 ```
+for w in wallets.txt:
+    resp = GET https://human.twin3.ai/v1/human?wallet={w}&min_score=70
+           # 402 → OKX Agent Payments Protocol pays $0.001 USD₮0 → 200
+    if resp.passes == true:
+        append w to qualified.txt
+```
+
+The agent issues each GET through its normal HTTP capability; the 402
+on each call is settled by the payments-protocol skill. Stay below ~10
+concurrent in-flight requests to avoid the upstream rate limiter.
 
 ### Step 3. Report
 
@@ -155,11 +186,11 @@ Return `qualified.txt` to the user with a summary:
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `onchainos payment pay` fails with "insufficient balance" | Wallet has < 0.001 USD₮0 on X Layer | Bridge or fund (see Prerequisites) |
+| Payment fails: "insufficient balance" reported by the **OKX Agent Payments Protocol** | Wallet has < 0.001 USD₮0 on X Layer | Bridge or fund (see Prerequisites) |
 | Server returns `invalid_wallet` | Address malformed | Validate `^0x[a-fA-F0-9]{40}$` before retrying |
 | Server returns `invalid_check` | Method name typo | Valid methods: recaptcha, google, discord, line, telegram, apple, g2fa, onchain, worldid |
 | Server returns 500 `internal_error` | Backend hiccup (BNB Chain RPC or Firestore) | Retry in 10s; if persistent, exclude that wallet from batch filters |
-| OKX broker returns `{"code":-1,"msg":"unknown error"}` on settle | Payment route mismatch (very rare) | Re-check the 402 accepts list; confirm USD₮0 not USDC on X Layer is the asset |
+| Payments protocol reports a settle error / `{"code":-1,"msg":"unknown error"}` | Payment route mismatch (very rare) | Confirm the funded asset is USD₮0 (`0x779ded0c…`) on X Layer, not USDC; the 402 `accepts` array advertises both Base USDC and X Layer USD₮0 |
 
 ---
 

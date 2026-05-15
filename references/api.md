@@ -130,7 +130,14 @@ Unknown tokens return HTTP 400 `invalid_include`.
 { "error": "internal_error" }                      // 500 — backend issue, retry safe
 ```
 
-The 402 response (before payment) carries the standard x402 `payment-required` header (base64-encoded JSON) — your `onchainos payment pay` CLI handles this automatically.
+The 402 response (before payment) carries the standard x402 challenge:
+v2 puts it in the `PAYMENT-REQUIRED` response header (base64-encoded
+JSON); v1 puts an `x402Version` body. The buyer does not parse or pay
+this manually — the **OKX Agent Payments Protocol**
+(`okx-agent-payments-protocol` skill) detects the 402, decodes the
+`accepts` array, signs the EIP-3009 authorization, attaches the
+`PAYMENT-SIGNATURE` (v2) / `X-PAYMENT` (v1) header, and replays the
+request automatically.
 
 ## Score Source — `firestore` vs `chain`
 
@@ -183,6 +190,6 @@ This is `twin3-human` v0.1.0. The `/v1/human` endpoint URL is stable; future ver
 
 ## See Also
 
-- [Quickstart for OKX agents](./quickstart-okx.md) — concrete end-to-end run with `onchainos payment pay`.
+- [Quickstart for OKX agents](./quickstart-okx.md) — concrete end-to-end run (plain GET; 402 auto-paid by the OKX Agent Payments Protocol).
 - Twin3 product brief: [https://twin3.ai](https://twin3.ai)
 - Twin Matrix SBT on BNB Chain: contract `0xE3ec133e29adDfbBA26a412c38ed5De37195156f`
