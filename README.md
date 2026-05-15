@@ -12,12 +12,18 @@ Backed by **141,871 [Twin Matrix](https://twin3.ai) Soulbound Tokens** on BNB Ch
 npx skills add twin3-ai/twin3-human-skill
 ```
 
-Or for an Agentic Wallet inside Claude Code / Cursor / OpenClaw:
+Or as a Claude Code plugin (also works in Cursor / Codex / OpenCode):
 
 ```bash
-# Claude Code
+# Claude Code — add the marketplace, then install the plugin
 /plugin marketplace add twin3-ai/twin3-human-skill
+/plugin install twin3-human@twin3
 ```
+
+`twin3` is the marketplace name declared in
+`.claude-plugin/marketplace.json`; `twin3-human` is the plugin/skill
+name. Once installed the skill auto-triggers on humanity-verification
+intents — no manual invocation needed.
 
 ## Quick demo
 

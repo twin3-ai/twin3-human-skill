@@ -1,0 +1,53 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "twin3",
+  "description": "Twin3 — humanity verification & proof-of-personhood skills for the AI agent economy",
+  "owner": {
+    "name": "Twin3.ai",
+    "email": "wen@twin3.ai"
+  },
+  "metadata": {
+    "description": "Verified-human layer for AI agents: is this wallet a real person, sybil resistance, per-method ZK verification, paid per query via x402 (USD₮0 on X Layer / USDC on Base)."
+  },
+  "plugins": [
+    {
+      "name": "twin3-human",
+      "source": "./",
+      "description": "Verify if any EVM wallet is backed by a real person — humanity score 0-255, proof of humanity, sybil resistance, per-method verification check. Pay per query with USD₮0 on X Layer (zero gas via OKX Onchain OS x402) or USDC on Base.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Twin3.ai",
+        "email": "wen@twin3.ai"
+      },
+      "homepage": "https://twin3.ai",
+      "repository": "https://github.com/twin3-ai/twin3-human-skill",
+      "license": "MIT",
+      "skills": [
+        "./"
+      ],
+      "keywords": [
+        "identity",
+        "humanity-verification",
+        "sybil-resistance",
+        "kya",
+        "proof-of-humanity",
+        "airdrop-filter",
+        "twin-matrix",
+        "sbt",
+        "x402",
+        "x-layer"
+      ],
+      "category": "analytics",
+      "tags": [
+        "identity",
+        "humanity-verification",
+        "sybil-resistance",
+        "kya",
+        "proof-of-humanity",
+        "airdrop-filter",
+        "x402"
+      ],
+      "strict": false
+    }
+  ]
+}
